@@ -17,7 +17,230 @@ form { margin-bottom: 10px; }
 
 button {
     padding: 6px 12px;
+    margin-top: 5px;<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>中古ブランド市場調査</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+}
+
+h1 { margin-bottom: 20px; }
+
+form { margin-bottom: 10px; }
+
+button {
+    padding: 6px 12px;
     margin-top: 5px;
+    cursor: pointer;
+}
+
+.card {
+    border: 1px solid #ddd;
+    padding: 10px;
+    margin: 10px 0;
+}
+
+img {
+    max-width: 120px;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.stats {
+    background: #f4f4f4;
+    padding: 10px;
+    margin: 15px 0;
+}
+
+/* ===== 販売元バッジ ===== */
+.badge {
+    display: inline-block;
+    padding: 3px 8px;
+    font-size: 12px;
+    color: white;
+    border-radius: 12px;
+    margin-bottom: 5px;
+}
+
+.yahoo { background-color: #7b4bff; }
+.rakuten { background-color: #bf0000; }
+
+/* ===== 売れやすさスコア ===== */
+.score {
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 6px;
+    display: inline-block;
+    margin-bottom: 5px;
+}
+
+.score-high {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.score-mid {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.score-low {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+/* ===== グラフ横並び ===== */
+.chart-row {
+    display: flex;
+    gap: 40px;
+    flex-wrap: wrap;
+    margin: 20px 0;
+}
+
+.chart-box {
+    width: 300px;
+}
+
+canvas {
+    width: 300px !important;
+    height: 300px !important;
+}
+</style>
+</head>
+
+<body>
+
+<h1>中古ブランド市場調査</h1>
+
+<form method="post" action="/search">
+    <input type="text" name="keyword" value="{{ keyword }}" placeholder="ブランド名">
+
+    <select name="sort_order">
+        <option value="asc" {% if sort_order=="asc" %}selected{% endif %}>価格安い順</option>
+        <option value="desc" {% if sort_order=="desc" %}selected{% endif %}>価格高い順</option>
+    </select>
+
+    <button type="submit">検索</button>
+</form>
+
+{% if keyword %}
+<form method="post" action="/download_csv">
+    <input type="hidden" name="keyword" value="{{ keyword }}">
+    <input type="hidden" name="sort_order" value="{{ sort_order }}">
+    <button type="submit">📥 CSVダウンロード</button>
+</form>
+{% endif %}
+
+{% if stats %}
+<div class="stats">
+    <h3>📊 統計</h3>
+    検索ヒット総件数: {{ mall_total }} 件<br>
+    表示件数: {{ stats.count }} 件<br>
+    平均価格: ¥{{ stats.avg }}<br>
+    中央値: ¥{{ stats.median }}<br>
+    最安価格: ¥{{ stats.min }}<br>
+    最高価格: ¥{{ stats.max }}
+</div>
+{% endif %}
+
+{% if trend or brand_labels %}
+<div class="chart-row">
+
+    {% if trend %}
+    <div class="chart-box">
+        <h3>📈 Google Trends</h3>
+        現在: {{ trend.current }}<br>
+        平均: {{ trend.avg }}
+        <canvas id="trendChart"></canvas>
+    </div>
+    {% endif %}
+
+    {% if brand_labels %}
+    <div class="chart-box">
+        <h3>🔥 ブランド別件数</h3>
+        <canvas id="brandChart"></canvas>
+    </div>
+    {% endif %}
+
+</div>
+{% endif %}
+
+{% if trend %}
+<script>
+new Chart(document.getElementById("trendChart"), {
+    type: 'line',
+    data: {
+        labels: Array({{ trend.scores|length }}).fill(""),
+        datasets: [{
+            label: "Trend",
+            data: {{ trend.scores }},
+            borderColor: "blue",
+            tension: 0.3
+        }]
+    },
+    options: { responsive: false }
+});
+</script>
+{% endif %}
+
+{% if brand_labels %}
+<script>
+new Chart(document.getElementById("brandChart"), {
+    type: 'pie',
+    data: {
+        labels: {{ brand_labels|tojson }},
+        datasets: [{
+            data: {{ brand_values|tojson }}
+        }]
+    },
+    options: { responsive: false }
+});
+</script>
+{% endif %}
+
+<!-- 🛒 商品一覧 -->
+{% for item in items %}
+<div class="card">
+
+    {% if item.source == "Yahoo" %}
+        <span class="badge yahoo">Yahoo</span>
+    {% elif item.source == "Rakuten" %}
+        <span class="badge rakuten">Rakuten</span>
+    {% endif %}
+
+    <!-- 売れやすさスコア -->
+    {% if item.sell_score >= 80 %}
+        <div class="score score-high">売れやすさスコア: {{ item.sell_score }}点</div>
+    {% elif item.sell_score >= 60 %}
+        <div class="score score-mid">売れやすさスコア: {{ item.sell_score }}点</div>
+    {% else %}
+        <div class="score score-low">売れやすさスコア: {{ item.sell_score }}点</div>
+    {% endif %}
+
+    {% if item.image %}
+        <img src="{{ item.image }}">
+    {% else %}
+        <img src="https://via.placeholder.com/120x120?text=No+Image">
+    {% endif %}
+
+    <h3>{{ item.name }}</h3>
+    価格: ¥{{ item.price }}<br>
+    仕入目安: ¥{{ item.purchase_price }}<br>
+    仕入率: {{ item.purchase_rate }}%<br>
+    想定利益: ¥{{ item.expected_profit }}<br>
+    <a href="{{ item.url }}" target="_blank">商品ページを見る</a>
+
+</div>
+{% endfor %}
+
+</body>
+</html>
     cursor: pointer;
 }
 

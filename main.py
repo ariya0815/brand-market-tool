@@ -11,10 +11,6 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pytrends.request import TrendReq
 
-# ==========================
-# APIキー
-# ==========================
-
 YAHOO_APP_ID = os.getenv("YAHOO_APP_ID")
 RAKUTEN_APP_ID = os.getenv("RAKUTEN_APP_ID")
 
@@ -32,7 +28,7 @@ def normalize_text(text):
     return text.strip()
 
 # ==========================
-# ブランド抽出（簡易）
+# ブランド抽出
 # ==========================
 def extract_brand(name):
     return name.split(" ")[0]
@@ -84,7 +80,7 @@ def get_google_trend(keyword):
         return None
 
 # ==========================
-# Yahoo検索（200件）
+# Yahoo検索（販売中のみ）
 # ==========================
 def search_yahoo(keyword):
     url = "https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch"
@@ -96,7 +92,8 @@ def search_yahoo(keyword):
             "appid": YAHOO_APP_ID,
             "query": f"{keyword} 中古",
             "results": 50,
-            "start": start
+            "start": start,
+            "availability": 1  # 在庫ありのみ
         }
         try:
             res = requests.get(url, params=params).json()
@@ -104,11 +101,10 @@ def search_yahoo(keyword):
                 total_count = res.get("totalResultsAvailable", 0)
 
             for i in res.get("hits", []):
-                image_url = i.get("image", {}).get("medium", "")
                 all_items.append({
                     "name": i.get("name", ""),
                     "price": i.get("price", 0),
-                    "image": image_url,
+                    "image": i.get("image", {}).get("medium", ""),
                     "url": i.get("url", ""),
                     "source": "Yahoo"
                 })
@@ -118,7 +114,7 @@ def search_yahoo(keyword):
     return all_items, total_count
 
 # ==========================
-# 楽天検索（200件）
+# 楽天検索（販売中のみ）
 # ==========================
 def search_rakuten(keyword):
     url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
@@ -129,29 +125,26 @@ def search_rakuten(keyword):
         params = {
             "applicationId": RAKUTEN_APP_ID,
             "keyword": keyword,
-            "hits": 30,   # ← 50ではなく30に変更
+            "hits": 30,
             "page": page,
-            "sort": "+itemPrice"  # 安い順
+            "sort": "+itemPrice",
+            "availability": 1
         }
 
         try:
-            response = requests.get(url, params=params)
-            print("楽天ステータス:", response.status_code)
-
-            res = response.json()
-            print("楽天レスポンスキー:", res.keys())
+            res = requests.get(url, params=params).json()
 
             if page == 1:
                 total_count = res.get("count", 0)
-                print("楽天総件数:", total_count)
 
             for i in res.get("Items", []):
                 item = i["Item"]
+                if item.get("itemPrice", 0) <= 0:
+                    continue
 
                 image_url = ""
                 if item.get("mediumImageUrls"):
-                    image_url = item["mediumImageUrls"][0]["imageUrl"]
-                    image_url = image_url.replace("?_ex=128x128","")
+                    image_url = item["mediumImageUrls"][0]["imageUrl"].replace("?_ex=128x128","")
 
                 all_items.append({
                     "name": item.get("itemName", ""),
@@ -160,12 +153,42 @@ def search_rakuten(keyword):
                     "url": item.get("itemUrl", ""),
                     "source": "Rakuten"
                 })
+        except:
+            pass
 
-        except Exception as e:
-            print("楽天エラー:", e)
-
-    print("Rakuten取得件数:", len(all_items))
     return all_items, total_count
+
+# ==========================
+# 売れやすさスコア
+# ==========================
+def calculate_sell_score(item, stats, total_count, trend, brand_counts):
+
+    score = 0
+
+    # ① 価格優位性（40点）
+    median = stats["median"]
+    if median > 0 and item["price"] < median:
+        diff_rate = (median - item["price"]) / median
+        score += min(diff_rate * 100, 40)
+
+    # ② 供給不足（30点）
+    if total_count < 50:
+        score += 30
+    elif total_count < 100:
+        score += 20
+    elif total_count < 200:
+        score += 10
+
+    # ③ トレンド（20点）
+    if trend:
+        score += (trend["avg"] / 100) * 20
+
+    # ④ ブランド出現頻度（10点）
+    brand_freq = brand_counts.get(item["brand"], 0)
+    if brand_freq > 0:
+        score += min((brand_freq / 50) * 10, 10)
+
+    return int(min(score, 100))
 
 # ==========================
 # 共通検索処理
@@ -176,19 +199,25 @@ def perform_search(keyword, sort_order):
 
     items = yahoo_items + rakuten_items
 
+    stats = analyze_prices(items)
+    trend = get_google_trend(keyword)
+    brand_counts = Counter([extract_brand(i["name"]) for i in items])
+
     for item in items:
         purchase, rate, profit = calculate_purchase(item["price"])
         item["purchase_price"] = purchase
         item["purchase_rate"] = rate
         item["expected_profit"] = profit
         item["brand"] = extract_brand(item["name"])
+        item["sell_score"] = calculate_sell_score(
+            item, stats,
+            yahoo_total + rakuten_total,
+            trend,
+            brand_counts
+        )
 
     items = sorted(items, key=lambda x: x["price"], reverse=(sort_order=="desc"))
 
-    stats = analyze_prices(items)
-    trend = get_google_trend(keyword)
-
-    brand_counts = Counter([i["brand"] for i in items])
     brand_labels = list(brand_counts.keys())[:10]
     brand_values = list(brand_counts.values())[:10]
 
@@ -220,6 +249,7 @@ def search(request: Request,
         "brand_values": values,
         "sort_order": sort_order
     })
+
 # ==========================
 # CSVダウンロード
 # ==========================
@@ -235,7 +265,8 @@ def download_csv(keyword: str = Form(""),
 
     writer.writerow([
         "商品名","価格","仕入目安","仕入率(%)",
-        "想定利益","販売元","URL"
+        "想定利益","売れやすさスコア",
+        "販売元","URL"
     ])
 
     for item in items:
@@ -245,6 +276,7 @@ def download_csv(keyword: str = Form(""),
             item["purchase_price"],
             item["purchase_rate"],
             item["expected_profit"],
+            item["sell_score"],
             item["source"],
             item["url"]
         ])
