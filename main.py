@@ -15,8 +15,8 @@ from pytrends.request import TrendReq
 # APIキー
 # ==========================
 
-YAHOO_APP_ID = os.getenv("dmVyPTIwMjUwNyZpZD1BNTR6TmhTSUNWJmhhc2g9WVRsa056STVZVEpoWmpZd05UUTJZZw")
-RAKUTEN_APP_ID = os.getenv("1088675020626270178")
+YAHOO_APP_ID = os.getenv("YAHOO_APP_ID")
+RAKUTEN_APP_ID = os.getenv("RAKUTEN_APP_ID")
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
