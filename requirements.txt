@@ -4,3 +4,4 @@ requests
 numpy
 jinja2
 pytrends
+python-multipart
