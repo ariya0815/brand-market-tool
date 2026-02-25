@@ -1,3 +1,4 @@
+import os
 import requests
 import unicodedata
 import re
@@ -13,8 +14,9 @@ from pytrends.request import TrendReq
 # ==========================
 # APIキー
 # ==========================
-YAHOO_APP_ID = "dmVyPTIwMjUwNyZpZD1BNTR6TmhTSUNWJmhhc2g9WVRsa056STVZVEpoWmpZd05UUTJZZw"
-RAKUTEN_APP_ID = "1088675020626270178"
+
+YAHOO_APP_ID = os.getenv("dmVyPTIwMjUwNyZpZD1BNTR6TmhTSUNWJmhhc2g9WVRsa056STVZVEpoWmpZd05UUTJZZw")
+RAKUTEN_APP_ID = os.getenv("1088675020626270178")
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")

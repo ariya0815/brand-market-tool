@@ -3,4 +3,3 @@ uvicorn
 requests
 numpy
 jinja2
-pytrends
