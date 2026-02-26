@@ -106,25 +106,34 @@ canvas {
 </div>
 {% endif %}
 
-{% if trend or brand_labels %}
+<!-- 🔥 常に表示するチャートエリア -->
 <div class="chart-row">
 
-    {% if trend %}
+    <!-- 📈 Google Trends -->
     <div class="chart-box">
         <h3>📈 Google Trends</h3>
-        現在: {{ trend.current }}<br>
-        平均: {{ trend.avg }}
-        <canvas id="trendChart"></canvas>
-    </div>
-    {% endif %}
 
-    {% if brand_labels %}
+        {% if trend %}
+            現在: {{ trend.current }}<br>
+            平均: {{ trend.avg }}
+            <canvas id="trendChart"></canvas>
+        {% else %}
+            データなし
+        {% endif %}
+    </div>
+
+    <!-- 🔥 ブランド別件数 -->
     <div class="chart-box">
         <h3>🔥 ブランド別件数</h3>
-        <canvas id="brandChart"></canvas>
-    </div>
-    {% endif %}
 
+        {% if brand_labels %}
+            <canvas id="brandChart"></canvas>
+        {% else %}
+            データなし
+        {% endif %}
+    </div>
+
+    <!-- 🧠 スコア内訳 -->
     <div class="chart-box">
         <h3>🧠 スコア内訳（例）</h3>
         <div class="score-explain">
@@ -137,7 +146,6 @@ canvas {
     </div>
 
 </div>
-{% endif %}
 
 {% if trend %}
 <script>
