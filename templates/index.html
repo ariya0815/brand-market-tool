@@ -11,10 +11,7 @@ h1 { margin-bottom: 20px; }
 form { margin-bottom: 10px; }
 button { padding: 6px 12px; margin-top: 5px; cursor: pointer; }
 
-input[type="number"] {
-    width: 120px;
-    padding: 4px;
-}
+input[type="number"] { width: 120px; padding: 4px; }
 
 .card { border: 1px solid #ddd; padding: 10px; margin: 10px 0; }
 img { max-width: 120px; display: block; margin-bottom: 5px; }
@@ -43,7 +40,6 @@ img { max-width: 120px; display: block; margin-bottom: 5px; }
 .score-mid { background-color: #fff3cd; color: #856404; }
 .score-low { background-color: #f8d7da; color: #721c24; }
 
-/* ===== スコア説明ブロック ===== */
 .score-explain {
     background: #eef3ff;
     border: 1px solid #cdd8ff;
@@ -52,10 +48,6 @@ img { max-width: 120px; display: block; margin-bottom: 5px; }
     font-size: 14px;
     border-radius: 6px;
     line-height: 1.6;
-}
-
-.score-explain strong {
-    color: #333;
 }
 
 .chart-row {
@@ -147,16 +139,6 @@ canvas {
 </div>
 {% endif %}
 
-    {% if brand_labels %}
-    <div class="chart-box">
-        <h3>🔥 ブランド別件数</h3>
-        <canvas id="brandChart"></canvas>
-    </div>
-    {% endif %}
-
-</div>
-{% endif %}
-
 {% if trend %}
 <script>
 new Chart(document.getElementById("trendChart"), {
@@ -214,9 +196,10 @@ new Chart(document.getElementById("brandChart"), {
     {% endif %}
 
     <h3>{{ item.name }}</h3>
-    ショップ名:<div style="color:#555; font-size:14px; margin-bottom:5px;">
-    🏬 {{ item.shop_name }}
+    <div style="color:#555; font-size:14px; margin-bottom:5px;">
+        🏬 {{ item.shop_name }}
     </div>
+
     価格: ¥{{ item.price }}<br>
     仕入目安: ¥{{ item.purchase_price }}<br>
     仕入率: {{ item.purchase_rate }}%<br>
