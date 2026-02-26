@@ -43,6 +43,21 @@ img { max-width: 120px; display: block; margin-bottom: 5px; }
 .score-mid { background-color: #fff3cd; color: #856404; }
 .score-low { background-color: #f8d7da; color: #721c24; }
 
+/* ===== スコア説明ブロック ===== */
+.score-explain {
+    background: #eef3ff;
+    border: 1px solid #cdd8ff;
+    padding: 12px;
+    margin-top: 10px;
+    font-size: 14px;
+    border-radius: 6px;
+    line-height: 1.6;
+}
+
+.score-explain strong {
+    color: #333;
+}
+
 .chart-row {
     display: flex;
     gap: 40px;
@@ -62,7 +77,6 @@ canvas {
 
 <h1>中古ブランド市場調査</h1>
 
-<!-- 🔍 検索フォーム -->
 <form method="post" action="/search">
     <input type="text" name="keyword" value="{{ keyword }}" placeholder="ブランド名">
 
@@ -71,7 +85,6 @@ canvas {
         <option value="desc" {% if sort_order=="desc" %}selected{% endif %}>価格高い順</option>
     </select>
 
-    <!-- 💰 価格フィルター -->
     ¥<input type="number" name="min_price" value="{{ min_price or 1 }}" min="0">
     〜
     ¥<input type="number" name="max_price" value="{{ max_price or 999999999 }}" min="0">
@@ -110,6 +123,17 @@ canvas {
         現在: {{ trend.current }}<br>
         平均: {{ trend.avg }}
         <canvas id="trendChart"></canvas>
+
+        <!-- 🧠 スコア内訳表示 -->
+        <div class="score-explain">
+            <strong>🧠 スコア内訳（例）</strong><br><br>
+            市場より20%安い　　 +40<br>
+            検索件数多い　　　　 +20<br>
+            出品数少ない　　　　 +15<br>
+            トレンド上昇　　　　 +10<br><br>
+            <strong>→ 85点 = かなり売れやすい</strong>
+        </div>
+
     </div>
     {% endif %}
 
@@ -156,7 +180,6 @@ new Chart(document.getElementById("brandChart"), {
 </script>
 {% endif %}
 
-<!-- 🛒 商品一覧 -->
 {% for item in items %}
 <div class="card">
 
