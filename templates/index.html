@@ -204,6 +204,9 @@ new Chart(document.getElementById("brandChart"), {
     {% endif %}
 
     <h3>{{ item.name }}</h3>
+    ショップ名:<div style="color:#555; font-size:14px; margin-bottom:5px;">
+    🏬 {{ item.shop_name }}
+    </div>
     価格: ¥{{ item.price }}<br>
     仕入目安: ¥{{ item.purchase_price }}<br>
     仕入率: {{ item.purchase_rate }}%<br>

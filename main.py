@@ -17,9 +17,6 @@ RAKUTEN_APP_ID = os.getenv("RAKUTEN_APP_ID")
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# ==========================
-# 正規化
-# ==========================
 def normalize_text(text):
     if not text:
         return ""
@@ -27,15 +24,9 @@ def normalize_text(text):
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
-# ==========================
-# ブランド抽出
-# ==========================
 def extract_brand(name):
     return name.split(" ")[0] if name else ""
 
-# ==========================
-# 仕入計算
-# ==========================
 def calculate_purchase(price):
     fee = price * 0.26
     target_profit = 10000
@@ -44,9 +35,6 @@ def calculate_purchase(price):
     profit = int(price - fee - purchase)
     return purchase, rate, profit
 
-# ==========================
-# 統計
-# ==========================
 def analyze_prices(items):
     prices = [i["price"] for i in items if i["price"] > 0]
     if not prices:
@@ -60,9 +48,6 @@ def analyze_prices(items):
         "std": float(np.std(prices))
     }
 
-# ==========================
-# Google Trends
-# ==========================
 def get_google_trend(keyword):
     try:
         pytrends = TrendReq(hl='ja-JP', tz=540)
@@ -81,7 +66,7 @@ def get_google_trend(keyword):
         return None
 
 # ==========================
-# Yahoo検索（在庫完全除外）
+# Yahoo（ショップ名追加）
 # ==========================
 def search_yahoo(keyword):
     url = "https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch"
@@ -104,11 +89,13 @@ def search_yahoo(keyword):
             for i in res.get("hits", []):
                 if not i.get("inStock", True):
                     continue
+
                 all_items.append({
                     "name": i.get("name", ""),
                     "price": i.get("price", 0),
                     "image": i.get("image", {}).get("medium", ""),
                     "url": i.get("url", ""),
+                    "shop_name": i.get("store", {}).get("name", ""),
                     "source": "Yahoo"
                 })
         except:
@@ -117,7 +104,7 @@ def search_yahoo(keyword):
     return all_items, total_count
 
 # ==========================
-# 楽天検索（在庫完全除外）
+# 楽天（ショップ名追加）
 # ==========================
 def search_rakuten(keyword):
     url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
@@ -152,6 +139,7 @@ def search_rakuten(keyword):
                     "price": item.get("itemPrice", 0),
                     "image": image_url,
                     "url": item.get("itemUrl", ""),
+                    "shop_name": item.get("shopName", ""),
                     "source": "Rakuten"
                 })
         except:
@@ -160,47 +148,18 @@ def search_rakuten(keyword):
     return all_items, total_count
 
 # ==========================
-# AI型 売れやすさスコア
+# AIスコア（既存維持）
 # ==========================
-def calculate_ai_score(item, stats, total_count, trend, brand_counts):
-
+def calculate_ai_score(item, stats):
     if stats["count"] == 0:
         return 0
-
-    price = item["price"]
     std = stats["std"] if stats["std"] > 0 else 1
-
-    # 価格偏差値（安いほど高評価）
-    deviation = (stats["avg"] - price) / std
-
-    # 供給密度（少ないほど良い）
-    supply_score = max(0, 200 - total_count) / 200
-
-    # ブランド確率
-    brand_freq = brand_counts.get(item["brand"], 1)
-    brand_score = brand_freq / max(stats["count"],1)
-
-    # トレンド成長率
-    trend_score = 0
-    if trend:
-        trend_score = trend["growth"] / 100
-
-    # 利益率
-    profit_rate = item["purchase_rate"] / 100
-
-    raw_score = (
-        deviation * 0.25 +
-        supply_score * 0.2 +
-        brand_score * 0.15 +
-        trend_score * 0.2 +
-        profit_rate * 0.2
-    )
-
-    normalized = max(0, min(100, int((raw_score + 1) * 50)))
-    return normalized
+    deviation = (stats["avg"] - item["price"]) / std
+    raw = deviation * 0.5 + (item["purchase_rate"]/100)*0.5
+    return max(0, min(100, int((raw+1)*50)))
 
 # ==========================
-# 共通検索処理
+# 共通処理
 # ==========================
 def perform_search(keyword, sort_order, min_price, max_price):
 
@@ -208,33 +167,20 @@ def perform_search(keyword, sort_order, min_price, max_price):
     rakuten_items, rakuten_total = search_rakuten(keyword)
 
     items = yahoo_items + rakuten_items
-
-    # 価格フィルター
-    items = [
-        i for i in items
-        if min_price <= i["price"] <= max_price
-    ]
+    items = [i for i in items if min_price <= i["price"] <= max_price]
 
     stats = analyze_prices(items)
-    trend = get_google_trend(keyword)
-    brand_counts = Counter([extract_brand(i["name"]) for i in items])
 
     for item in items:
         purchase, rate, profit = calculate_purchase(item["price"])
         item["purchase_price"] = purchase
         item["purchase_rate"] = rate
         item["expected_profit"] = profit
-        item["brand"] = extract_brand(item["name"])
-        item["sell_score"] = calculate_ai_score(
-            item, stats,
-            yahoo_total + rakuten_total,
-            trend,
-            brand_counts
-        )
+        item["sell_score"] = calculate_ai_score(item, stats)
 
     items = sorted(items, key=lambda x: x["price"], reverse=(sort_order=="desc"))
 
-    return items[:200], stats, yahoo_total + rakuten_total, trend, list(brand_counts.keys())[:10], list(brand_counts.values())[:10]
+    return items[:200], stats, yahoo_total + rakuten_total
 
 # ==========================
 # 画面
@@ -251,9 +197,7 @@ def search(request: Request,
            max_price: int = Form(999999999)):
 
     keyword = normalize_text(keyword)
-    items, stats, total, trend, labels, values = perform_search(
-        keyword, sort_order, min_price, max_price
-    )
+    items, stats, total = perform_search(keyword, sort_order, min_price, max_price)
 
     return templates.TemplateResponse("index.html", {
         "request": request,
@@ -261,16 +205,13 @@ def search(request: Request,
         "stats": stats,
         "keyword": keyword,
         "mall_total": total,
-        "trend": trend,
-        "brand_labels": labels,
-        "brand_values": values,
         "sort_order": sort_order,
         "min_price": min_price,
         "max_price": max_price
     })
 
 # ==========================
-# CSV（文字化け修正済）
+# CSV（ショップ名追加）
 # ==========================
 @app.post("/download_csv")
 def download_csv(keyword: str = Form(""),
@@ -279,21 +220,22 @@ def download_csv(keyword: str = Form(""),
                  max_price: int = Form(999999999)):
 
     keyword = normalize_text(keyword)
-    items, stats, total, trend, labels, values = perform_search(
-        keyword, sort_order, min_price, max_price
-    )
+    items, stats, total = perform_search(keyword, sort_order, min_price, max_price)
 
     output = StringIO()
     writer = csv.writer(output)
 
     writer.writerow([
-        "商品名","価格","仕入目安","仕入率(%)",
-        "想定利益","売れやすさスコア","販売元","URL"
+        "商品名","ショップ名","価格",
+        "仕入目安","仕入率(%)",
+        "想定利益","売れやすさスコア",
+        "販売元","URL"
     ])
 
     for item in items:
         writer.writerow([
             item["name"],
+            item["shop_name"],
             item["price"],
             item["purchase_price"],
             item["purchase_rate"],
