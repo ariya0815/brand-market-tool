@@ -123,18 +123,29 @@ canvas {
         現在: {{ trend.current }}<br>
         平均: {{ trend.avg }}
         <canvas id="trendChart"></canvas>
+    </div>
+    {% endif %}
 
-        <!-- 🧠 スコア内訳表示 -->
+    {% if brand_labels %}
+    <div class="chart-box">
+        <h3>🔥 ブランド別件数</h3>
+        <canvas id="brandChart"></canvas>
+    </div>
+    {% endif %}
+
+    <!-- 🧠 ここに移動 -->
+    <div class="chart-box">
+        <h3>🧠 スコア内訳（例）</h3>
         <div class="score-explain">
-            <strong>🧠 スコア内訳（例）</strong><br><br>
             市場より20%安い　　 +40<br>
             検索件数多い　　　　 +20<br>
             出品数少ない　　　　 +15<br>
             トレンド上昇　　　　 +10<br><br>
             <strong>→ 85点 = かなり売れやすい</strong>
         </div>
-
     </div>
+
+</div>
     {% endif %}
 
     {% if brand_labels %}
