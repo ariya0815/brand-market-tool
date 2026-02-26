@@ -30,12 +30,72 @@ def normalize_text(text):
 def extract_brand(name):
     return name.split(" ")[0] if name else ""
 
-def calculate_purchase(price):
-    fee = price * 0.26
-    target_profit = 10000
-    purchase = max(int(price - fee - target_profit), 0)
-    rate = round((purchase / price) * 100, 1) if price else 0
-    profit = int(price - fee - purchase)
+# ==========================
+# 🎯 利益決定ロジック
+# ==========================
+def get_profit_by_category(category, purchase_price):
+
+    # バッグ
+    if category == "bag":
+        if purchase_price < 15000:
+            return 7500
+        elif purchase_price < 35000:
+            return 10000
+        elif purchase_price < 70000:
+            return 13000
+        elif purchase_price < 100000:
+            return 15000
+        elif purchase_price < 150000:
+            return 18000
+        elif purchase_price < 180000:
+            return 20000
+        elif purchase_price < 200000:
+            return 22000
+        else:
+            return 25000
+
+    # 財布・アパレル・シューズ・その他
+    else:
+        if purchase_price < 10000:
+            return 7000
+        elif purchase_price < 30000:
+            return 9000
+        elif purchase_price < 50000:
+            return 11000
+        elif purchase_price < 80000:
+            return 13000
+        elif purchase_price < 120000:
+            return 15000
+        elif purchase_price < 150000:
+            return 18000
+        elif purchase_price < 200000:
+            return 22000
+        else:
+            return 25000
+
+# ==========================
+# 🔥 仕入計算（完全改良版）
+# ==========================
+def calculate_purchase(price, category="wallet"):
+
+    if price <= 0:
+        return 0, 0, 0
+
+    total_fee = price * 0.26   # 11% + 15%
+    available = price - total_fee
+
+    # 仮仕入価格（最初は単純に引く）
+    tentative_purchase = available * 0.7
+
+    # その仮仕入価格から適切な利益を決定
+    target_profit = get_profit_by_category(category, tentative_purchase)
+
+    # 最終仕入価格
+    purchase = int(max(price - total_fee - target_profit, 0))
+
+    rate = round((purchase / price) * 100, 1)
+    profit = int(price - total_fee - purchase)
+
     return purchase, rate, profit
 
 def analyze_prices(items):
@@ -72,105 +132,6 @@ def get_google_trend(keyword):
         return None
 
 # ==========================
-# Yahoo検索（ショップ名安定取得）
-# ==========================
-def search_yahoo(keyword):
-    url = "https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch"
-    all_items = []
-    total_count = 0
-
-    for start in [1, 51, 101, 151]:
-        params = {
-            "appid": YAHOO_APP_ID,
-            "query": f"{keyword} 中古",
-            "results": 50,
-            "start": start,
-            "availability": 1
-        }
-
-        try:
-            res = requests.get(url, params=params).json()
-
-            if start == 1:
-                total_count = res.get("totalResultsAvailable", 0)
-
-            for i in res.get("hits", []):
-                if not i.get("inStock", True):
-                    continue
-
-                # 🔥 Yahooはseller / store 両方試す
-                shop_name = ""
-                if "store" in i and isinstance(i["store"], dict):
-                    shop_name = i["store"].get("name", "")
-                if not shop_name and "seller" in i and isinstance(i["seller"], dict):
-                    shop_name = i["seller"].get("name", "")
-                if not shop_name:
-                    shop_name = "Yahooショップ"
-
-                all_items.append({
-                    "name": i.get("name", ""),
-                    "price": i.get("price", 0),
-                    "image": i.get("image", {}).get("medium", ""),
-                    "url": i.get("url", ""),
-                    "shop_name": shop_name,
-                    "source": "Yahoo"
-                })
-
-        except:
-            pass
-
-    return all_items, total_count
-
-# ==========================
-# 楽天検索（ショップ名安定取得）
-# ==========================
-def search_rakuten(keyword):
-    url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
-    all_items = []
-    total_count = 0
-
-    for page in [1, 2, 3, 4]:
-        params = {
-            "applicationId": RAKUTEN_APP_ID,
-            "keyword": keyword,
-            "hits": 30,
-            "page": page,
-            "availability": 1
-        }
-
-        try:
-            res = requests.get(url, params=params).json()
-
-            if page == 1:
-                total_count = res.get("count", 0)
-
-            for i in res.get("Items", []):
-                item = i["Item"]
-
-                if item.get("availability") != 1:
-                    continue
-
-                image_url = ""
-                if item.get("mediumImageUrls"):
-                    image_url = item["mediumImageUrls"][0]["imageUrl"].replace("?_ex=128x128","")
-
-                shop_name = item.get("shopName") or "楽天ショップ"
-
-                all_items.append({
-                    "name": item.get("itemName", ""),
-                    "price": item.get("itemPrice", 0),
-                    "image": image_url,
-                    "url": item.get("itemUrl", ""),
-                    "shop_name": shop_name,
-                    "source": "Rakuten"
-                })
-
-        except:
-            pass
-
-    return all_items, total_count
-
-# ==========================
 # AIスコア
 # ==========================
 def calculate_ai_score(item, stats):
@@ -194,14 +155,23 @@ def perform_search(keyword, sort_order, min_price, max_price):
 
     stats = analyze_prices(items)
 
-    brand_counts = Counter([extract_brand(i["name"]) for i in items])
-    brand_labels = list(brand_counts.keys())[:10]
-    brand_values = list(brand_counts.values())[:10]
-
-    trend = get_google_trend(keyword)
-
     for item in items:
-        purchase, rate, profit = calculate_purchase(item["price"])
+
+        # 🔥 カテゴリ自動判定
+        name = item["name"].lower()
+        if "bag" in name or "バッグ" in name:
+            category = "bag"
+        elif "wallet" in name or "財布" in name:
+            category = "wallet"
+        elif "shoe" in name or "シューズ" in name:
+            category = "wallet"
+        elif "apparel" in name or "服" in name:
+            category = "wallet"
+        else:
+            category = "wallet"
+
+        purchase, rate, profit = calculate_purchase(item["price"], category)
+
         item["purchase_price"] = purchase
         item["purchase_rate"] = rate
         item["expected_profit"] = profit
@@ -213,87 +183,7 @@ def perform_search(keyword, sort_order, min_price, max_price):
         items[:200],
         stats,
         yahoo_total + rakuten_total,
-        trend,
-        brand_labels,
-        brand_values
-    )
-
-# ==========================
-# 画面
-# ==========================
-@app.get("/", response_class=HTMLResponse)
-def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
-
-@app.post("/search", response_class=HTMLResponse)
-def search(request: Request,
-           keyword: str = Form(""),
-           sort_order: str = Form("asc"),
-           min_price: int = Form(1),
-           max_price: int = Form(999999999)):
-
-    keyword = normalize_text(keyword)
-
-    items, stats, total, trend, labels, values = perform_search(
-        keyword, sort_order, min_price, max_price
-    )
-
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "items": items,
-        "stats": stats,
-        "keyword": keyword,
-        "mall_total": total,
-        "trend": trend,
-        "brand_labels": labels,
-        "brand_values": values,
-        "sort_order": sort_order,
-        "min_price": min_price,
-        "max_price": max_price
-    })
-
-# ==========================
-# CSV
-# ==========================
-@app.post("/download_csv")
-def download_csv(keyword: str = Form(""),
-                 sort_order: str = Form("asc"),
-                 min_price: int = Form(1),
-                 max_price: int = Form(999999999)):
-
-    keyword = normalize_text(keyword)
-
-    items, stats, total, trend, labels, values = perform_search(
-        keyword, sort_order, min_price, max_price
-    )
-
-    output = StringIO()
-    writer = csv.writer(output)
-
-    writer.writerow([
-        "商品名","ショップ名","価格",
-        "仕入目安","仕入率(%)",
-        "想定利益","売れやすさスコア",
-        "販売元","URL"
-    ])
-
-    for item in items:
-        writer.writerow([
-            item["name"],
-            item["shop_name"],
-            item["price"],
-            item["purchase_price"],
-            item["purchase_rate"],
-            item["expected_profit"],
-            item["sell_score"],
-            item["source"],
-            item["url"]
-        ])
-
-    csv_text = '\ufeff' + output.getvalue()
-
-    return StreamingResponse(
-        iter([csv_text]),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=search_result.csv"}
+        None,
+        [],
+        []
     )
