@@ -72,7 +72,7 @@ def get_google_trend(keyword):
         return None
 
 # ==========================
-# Yahoo検索
+# Yahoo検索（ショップ名安定取得）
 # ==========================
 def search_yahoo(keyword):
     url = "https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch"
@@ -87,8 +87,10 @@ def search_yahoo(keyword):
             "start": start,
             "availability": 1
         }
+
         try:
             res = requests.get(url, params=params).json()
+
             if start == 1:
                 total_count = res.get("totalResultsAvailable", 0)
 
@@ -96,21 +98,31 @@ def search_yahoo(keyword):
                 if not i.get("inStock", True):
                     continue
 
+                # 🔥 Yahooはseller / store 両方試す
+                shop_name = ""
+                if "store" in i and isinstance(i["store"], dict):
+                    shop_name = i["store"].get("name", "")
+                if not shop_name and "seller" in i and isinstance(i["seller"], dict):
+                    shop_name = i["seller"].get("name", "")
+                if not shop_name:
+                    shop_name = "Yahooショップ"
+
                 all_items.append({
                     "name": i.get("name", ""),
                     "price": i.get("price", 0),
                     "image": i.get("image", {}).get("medium", ""),
                     "url": i.get("url", ""),
-                    "shop_name": i.get("store", {}).get("name", ""),
+                    "shop_name": shop_name,
                     "source": "Yahoo"
                 })
+
         except:
             pass
 
     return all_items, total_count
 
 # ==========================
-# 楽天検索
+# 楽天検索（ショップ名安定取得）
 # ==========================
 def search_rakuten(keyword):
     url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
@@ -128,11 +140,13 @@ def search_rakuten(keyword):
 
         try:
             res = requests.get(url, params=params).json()
+
             if page == 1:
                 total_count = res.get("count", 0)
 
             for i in res.get("Items", []):
                 item = i["Item"]
+
                 if item.get("availability") != 1:
                     continue
 
@@ -140,14 +154,17 @@ def search_rakuten(keyword):
                 if item.get("mediumImageUrls"):
                     image_url = item["mediumImageUrls"][0]["imageUrl"].replace("?_ex=128x128","")
 
+                shop_name = item.get("shopName") or "楽天ショップ"
+
                 all_items.append({
                     "name": item.get("itemName", ""),
                     "price": item.get("itemPrice", 0),
                     "image": image_url,
                     "url": item.get("itemUrl", ""),
-                    "shop_name": item.get("shopName", ""),
+                    "shop_name": shop_name,
                     "source": "Rakuten"
                 })
+
         except:
             pass
 
@@ -165,7 +182,7 @@ def calculate_ai_score(item, stats):
     return max(0, min(100, int((raw+1)*50)))
 
 # ==========================
-# 共通検索処理（🔥 修正版）
+# 共通検索処理
 # ==========================
 def perform_search(keyword, sort_order, min_price, max_price):
 
@@ -177,12 +194,10 @@ def perform_search(keyword, sort_order, min_price, max_price):
 
     stats = analyze_prices(items)
 
-    # 🔥 ブランド集計追加
     brand_counts = Counter([extract_brand(i["name"]) for i in items])
     brand_labels = list(brand_counts.keys())[:10]
     brand_values = list(brand_counts.values())[:10]
 
-    # 🔥 Google Trends取得
     trend = get_google_trend(keyword)
 
     for item in items:
