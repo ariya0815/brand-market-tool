@@ -6,40 +6,21 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-body {
-    font-family: Arial, sans-serif;
-    padding: 20px;
-}
-
+body { font-family: Arial, sans-serif; padding: 20px; }
 h1 { margin-bottom: 20px; }
-
 form { margin-bottom: 10px; }
+button { padding: 6px 12px; margin-top: 5px; cursor: pointer; }
 
-button {
-    padding: 6px 12px;
-    margin-top: 5px;
-    cursor: pointer;
+input[type="number"] {
+    width: 120px;
+    padding: 4px;
 }
 
-.card {
-    border: 1px solid #ddd;
-    padding: 10px;
-    margin: 10px 0;
-}
+.card { border: 1px solid #ddd; padding: 10px; margin: 10px 0; }
+img { max-width: 120px; display: block; margin-bottom: 5px; }
 
-img {
-    max-width: 120px;
-    display: block;
-    margin-bottom: 5px;
-}
+.stats { background: #f4f4f4; padding: 10px; margin: 15px 0; }
 
-.stats {
-    background: #f4f4f4;
-    padding: 10px;
-    margin: 15px 0;
-}
-
-/* ===== 販売元バッジ ===== */
 .badge {
     display: inline-block;
     padding: 3px 8px;
@@ -48,11 +29,9 @@ img {
     border-radius: 12px;
     margin-bottom: 5px;
 }
-
 .yahoo { background-color: #7b4bff; }
 .rakuten { background-color: #bf0000; }
 
-/* ===== 売れやすさスコア ===== */
 .score {
     font-weight: bold;
     padding: 4px 8px;
@@ -60,33 +39,17 @@ img {
     display: inline-block;
     margin-bottom: 5px;
 }
+.score-high { background-color: #d4edda; color: #155724; }
+.score-mid { background-color: #fff3cd; color: #856404; }
+.score-low { background-color: #f8d7da; color: #721c24; }
 
-.score-high {
-    background-color: #d4edda;
-    color: #155724;
-}
-
-.score-mid {
-    background-color: #fff3cd;
-    color: #856404;
-}
-
-.score-low {
-    background-color: #f8d7da;
-    color: #721c24;
-}
-
-/* ===== グラフ横並び ===== */
 .chart-row {
     display: flex;
     gap: 40px;
     flex-wrap: wrap;
     margin: 20px 0;
 }
-
-.chart-box {
-    width: 300px;
-}
+.chart-box { width: 300px; }
 
 canvas {
     width: 300px !important;
@@ -99,6 +62,7 @@ canvas {
 
 <h1>中古ブランド市場調査</h1>
 
+<!-- 🔍 検索フォーム -->
 <form method="post" action="/search">
     <input type="text" name="keyword" value="{{ keyword }}" placeholder="ブランド名">
 
@@ -107,6 +71,11 @@ canvas {
         <option value="desc" {% if sort_order=="desc" %}selected{% endif %}>価格高い順</option>
     </select>
 
+    <!-- 💰 価格フィルター -->
+    ¥<input type="number" name="min_price" value="{{ min_price or 1 }}" min="0">
+    〜
+    ¥<input type="number" name="max_price" value="{{ max_price or 999999999 }}" min="0">
+
     <button type="submit">検索</button>
 </form>
 
@@ -114,6 +83,8 @@ canvas {
 <form method="post" action="/download_csv">
     <input type="hidden" name="keyword" value="{{ keyword }}">
     <input type="hidden" name="sort_order" value="{{ sort_order }}">
+    <input type="hidden" name="min_price" value="{{ min_price }}">
+    <input type="hidden" name="max_price" value="{{ max_price }}">
     <button type="submit">📥 CSVダウンロード</button>
 </form>
 {% endif %}
@@ -195,7 +166,6 @@ new Chart(document.getElementById("brandChart"), {
         <span class="badge rakuten">Rakuten</span>
     {% endif %}
 
-    <!-- 売れやすさスコア -->
     {% if item.sell_score >= 80 %}
         <div class="score score-high">売れやすさスコア: {{ item.sell_score }}点</div>
     {% elif item.sell_score >= 60 %}
